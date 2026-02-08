@@ -1,4 +1,4 @@
-// Mason's Extreme Integrated Masker v3.0
+// Mason's Final Extreme Shield v3.0
 const musicLibrary = [
     { name: "Kamma", url: "music/Kamma Official Audio.mp3" },
     { name: "Coup D'état", url: "music/Coup D'état Song.mp3" }
@@ -9,7 +9,6 @@ let isPlaying = false;
 
 function initPlaylist() {
     const list = document.getElementById('playlist');
-    // Clear list first to prevent duplicates
     list.innerHTML = ''; 
     
     musicLibrary.forEach(song => {
@@ -23,16 +22,22 @@ function initPlaylist() {
 }
 
 async function startEngine(url) {
-    if (isPlaying) {
-        stopAudio();
-    }
+    if (isPlaying) { stopAudio(); }
 
-    // Initialize Audio Context
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const status = document.getElementById('statusIndicator');
-    status.innerText = "Loading Audio...";
+    status.innerText = "Connecting Mic...";
 
     try {
+        // GET RAW AUDIO - Disables browser muffling
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
+            } 
+        });
+
         const response = await fetch(url);
         const arrayBuffer = await response.arrayBuffer();
         const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
@@ -41,40 +46,39 @@ async function startEngine(url) {
         musicSource.buffer = audioBuffer;
         musicSource.loop = true;
 
-        // 1. HIGH BOOST FILTER (The Masker)
+        // HIGH SHELF: Boosts everything above 5kHz (The Drill Zone)
         highBoostFilter = audioCtx.createBiquadFilter();
         highBoostFilter.type = "highshelf";
-        highBoostFilter.frequency.value = 6000; 
+        highBoostFilter.frequency.value = 5000; 
         highBoostFilter.gain.value = 0;
 
-        // 2. LOW DUCKER (To make the boost stand out)
+        // LOW SHELF: Used to "duck" bass for contrast
         lowDucker = audioCtx.createBiquadFilter();
         lowDucker.type = "lowshelf";
-        lowDucker.frequency.value = 500;
+        lowDucker.frequency.value = 800;
         lowDucker.gain.value = 0;
 
-        // 3. MIC ANALYSER (The Listener)
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // MIC ANALYSER
         const micSource = audioCtx.createMediaStreamSource(stream);
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = 256;
         micSource.connect(analyser);
 
-        // Chain: Music -> HighBoost -> LowDucker -> Speakers
+        // ROUTING: Music -> Boost -> Duck -> Speakers
         musicSource.connect(highBoostFilter);
         highBoostFilter.connect(lowDucker);
         lowDucker.connect(audioCtx.destination);
         
         musicSource.start();
         isPlaying = true;
-        status.innerText = "MAX SHIELD ACTIVE";
+        status.innerText = "SYSTEM ACTIVE";
         status.style.background = "#059669";
 
         setupVisualizer();
         runDetectionLoop();
     } catch (err) {
-        console.error("Error starting audio:", err);
-        status.innerText = "Error Loading File";
+        console.error(err);
+        status.innerText = "Mic Error - Please Allow Access";
     }
 }
 
@@ -82,9 +86,8 @@ function stopAudio() {
     if (musicSource) {
         try { musicSource.stop(); } catch(e) {}
         isPlaying = false;
-        const status = document.getElementById('statusIndicator');
-        status.innerText = "System Standby";
-        status.style.background = "#334155";
+        document.getElementById('statusIndicator').innerText = "System Standby";
+        document.getElementById('statusIndicator').style.background = "#334155";
     }
 }
 
@@ -98,21 +101,24 @@ function runDetectionLoop() {
         if (!isPlaying) return; 
         analyser.getByteFrequencyData(dataArray);
         
-        // Target high-pitched frequencies (Drill zone)
-        let highFreqEnergy = 0;
-        for(let i = 50; i < 110; i++) { highFreqEnergy += dataArray[i]; }
-        let avg = highFreqEnergy / 60;
+        // Summing up high-frequency bins (approx 5kHz to 12kHz)
+        let highFreqSum = 0;
+        for(let i = 40; i < 120; i++) { highFreqSum += dataArray[i]; }
+        let avg = highFreqSum / 80;
 
-        // TRIGGER LOGIC
-        if (avg > 20) { // Highly sensitive
-            highBoostFilter.gain.setTargetAtTime(40, audioCtx.currentTime, 0.05); // Huge boost
-            lowDucker.gain.setTargetAtTime(-15, audioCtx.currentTime, 0.1);    // Cut bass
-            status.innerText = "DRILL DETECTED - SHIELD BOOSTED";
+        // TRIGGER SENSITIVITY: Lowered to 10 for instant reaction
+        if (avg > 10) { 
+            // Aggressive 45dB boost
+            highBoostFilter.gain.setTargetAtTime(45, audioCtx.currentTime, 0.03); 
+            // Extreme bass ducking for maximum contrast
+            lowDucker.gain.setTargetAtTime(-25, audioCtx.currentTime, 0.05);
+            
+            status.innerText = "SHIELD BOOSTED - DRILL DETECTED";
             status.style.background = "#dc2626";
         } else { 
-            highBoostFilter.gain.setTargetAtTime(0, audioCtx.currentTime, 0.4);
-            lowDucker.gain.setTargetAtTime(0, audioCtx.currentTime, 0.4);
-            status.innerText = "Monitoring...";
+            highBoostFilter.gain.setTargetAtTime(0, audioCtx.currentTime, 0.3);
+            lowDucker.gain.setTargetAtTime(0, audioCtx.currentTime, 0.3);
+            status.innerText = "Monitoring Environment...";
             status.style.background = "#059669";
         }
         requestAnimationFrame(check);
@@ -122,9 +128,29 @@ function runDetectionLoop() {
 
 function setupVisualizer() {
     const canvas = document.getElementById('visualizer');
-    if (!canvas) return;
     const canvasCtx = canvas.getContext('2d');
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
     const draw = () => {
-        if (!
+        if (!isPlaying) return;
+        requestAnimationFrame(draw);
+        analyser.getByteFrequencyData(dataArray);
+        
+        canvasCtx.fillStyle = '#0f172a';
+        canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        const barWidth = (canvas.width / dataArray.length) * 2;
+        let x = 0;
+
+        for(let i = 0; i < dataArray.length; i++) {
+            let barHeight = dataArray[i] / 1.5;
+            // Bars turn bright orange when loud high frequencies are detected
+            canvasCtx.fillStyle = i > 40 && dataArray[i] > 50 ? '#fb923c' : '#38bdf8';
+            canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+            x += barWidth + 1;
+        }
+    };
+    draw();
+}
+
+window.onload = initPlaylist;
