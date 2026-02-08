@@ -1,10 +1,10 @@
-// Mason's Master Gain & Shield v3.0
+// Mason's Overdrive Shield v3.0 - Maximum Drastic Change
 const musicLibrary = [
     { name: "Kamma", url: "music/Kamma Official Audio.mp3" },
     { name: "Coup D'état", url: "music/Coup D'état Song.mp3" }
 ];
 
-let audioCtx, musicSource, highBoostFilter, lowDucker, masterGain, analyser, limiter;
+let audioCtx, musicSource, highBoostFilter, masterGain, analyser;
 let isPlaying = false;
 
 function initPlaylist() {
@@ -24,8 +24,7 @@ async function startEngine(url) {
 
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const status = document.getElementById('statusIndicator');
-    status.innerText = "Initializing Full Power Shield...";
-
+    
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ 
             audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
@@ -39,59 +38,48 @@ async function startEngine(url) {
         musicSource.buffer = audioBuffer;
         musicSource.loop = true;
 
-        // 1. Frequency Boost
+        // THE MASKER: High-pass filter makes the music "piercing" to match the drill
         highBoostFilter = audioCtx.createBiquadFilter();
-        highBoostFilter.type = "highshelf";
-        highBoostFilter.frequency.value = 6000; 
-        highBoostFilter.gain.value = 0;
-
-        // 2. Bass Ducker
-        lowDucker = audioCtx.createBiquadFilter();
-        lowDucker.type = "lowshelf";
-        lowDucker.frequency.value = 800;
-        lowDucker.gain.value = 0;
-
-        // 3. MASTER GAIN (Overall Volume Control)
+        highBoostFilter.type = "highpass"; // Switched from highshelf to highpass for more "bite"
+        highBoostFilter.frequency.value = 4000; 
+        
+        // MASTER GAIN: Set to a huge multiplier
         masterGain = audioCtx.createGain();
-        masterGain.gain.value = 1.0; // Normal volume
-
-        // 4. LIMITER (Protection)
-        limiter = audioCtx.createDynamicsCompressor();
-        limiter.threshold.setValueAtTime(-10, audioCtx.currentTime);
-        limiter.knee.setValueAtTime(30, audioCtx.currentTime);
-        limiter.ratio.setValueAtTime(12, audioCtx.currentTime);
+        masterGain.gain.value = 1.0; 
 
         const micSource = audioCtx.createMediaStreamSource(stream);
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = 256;
         micSource.connect(analyser);
 
-        // CHAIN: Music -> HighBoost -> LowDuck -> MasterGain -> Limiter -> Output
+        // We use TWO paths: One for normal music, and one for the "Shield"
+        // This ensures the music doesn't just disappear, it just gets a massive boost
+        const dryGain = audioCtx.createGain();
+        dryGain.gain.value = 1.0;
+
+        musicSource.connect(dryGain);
+        dryGain.connect(audioCtx.destination);
+
         musicSource.connect(highBoostFilter);
-        highBoostFilter.connect(lowDucker);
-        lowDucker.connect(masterGain);
-        masterGain.connect(limiter);
-        limiter.connect(audioCtx.destination);
+        highBoostFilter.connect(masterGain);
+        masterGain.connect(audioCtx.destination);
         
         musicSource.start();
         isPlaying = true;
-        status.innerText = "SYSTEM ACTIVE";
+        status.innerText = "SYSTEM ARMED";
         status.style.background = "#059669";
 
-        setupVisualizer();
         runDetectionLoop();
     } catch (err) {
-        console.error(err);
-        status.innerText = "Mic Error";
+        status.innerText = "Error: Check Mic";
     }
 }
 
 function stopAudio() {
     if (musicSource) {
-        try { musicSource.stop(); } catch(e) {}
+        musicSource.stop();
         isPlaying = false;
-        document.getElementById('statusIndicator').innerText = "System Standby";
-        document.getElementById('statusIndicator').style.background = "#334155";
+        document.getElementById('statusIndicator').innerText = "Standby";
     }
 }
 
@@ -105,9 +93,24 @@ function runDetectionLoop() {
         analyser.getByteFrequencyData(dataArray);
         
         let highFreqSum = 0;
-        for(let i = 45; i < 115; i++) { highFreqSum += dataArray[i]; }
-        let avg = highFreqSum / 70;
+        for(let i = 40; i < 120; i++) { highFreqSum += dataArray[i]; }
+        let avg = highFreqSum / 80;
 
-        if (avg > 12) { 
-            // SHIELD ON: Boost high freq, duck low freq, and increase OVERALL gain
-            highBoostFilter.gain.setTargetAtTime(20,
+        if (avg > 10) { 
+            // DRASTIC CHANGE: Boost the high-pass path by 10x volume
+            masterGain.gain.setTargetAtTime(10.0, audioCtx.currentTime, 0.05); 
+            status.innerText = "!!! SHIELD OVERDRIVE !!!";
+            status.style.background = "#dc2626";
+            status.style.boxShadow = "0 0 20px #ef4444";
+        } else { 
+            masterGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.2);
+            status.innerText = "Monitoring...";
+            status.style.background = "#059669";
+            status.style.boxShadow = "none";
+        }
+        requestAnimationFrame(check);
+    };
+    check();
+}
+
+window.onload = initPlaylist;
