@@ -2,28 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mason's Smart Masker v3.0</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Mason's Sound Shield v4.0</title>
+    <style>
+        body { background: #0f172a; color: white; font-family: sans-serif; text-align: center; padding: 20px; }
+        #statusIndicator { padding: 15px; border-radius: 8px; margin: 20px 0; font-weight: bold; transition: 0.3s; }
+        button { padding: 10px 20px; margin: 10px; cursor: pointer; border-radius: 5px; border: none; }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Smart Audio Masker</h1>
-        <p>Active Frequency Protection for Dental Procedures</p>
-        
-        <div id="statusIndicator" class="status-box">System Standby</div>
-        
-<div class="player-controls">
-    <h3>Select a Track to Start</h3>
-    <div id="playlist"></div>
-    <br>
-    <button id="stopBtn" style="background: #ef4444; color: white;">STOP AUDIO</button>
-</div>
 
-        <div class="visualizer-container">
-            <canvas id="visualizer"></canvas>
-        </div>
-    </div>
+    <h1>Clinical Sound Shield</h1>
+    
+    <div id="statusIndicator" style="background: #334155;">Standby</div>
+
+    <canvas id="visualizer" width="600" height="200" style="background: #1e293b; border-radius: 8px; width: 100%; max-width: 600px;"></canvas>
+
+    <div id="playlist"></div>
+    <button id="stopBtn" style="background: #ef4444; color: white;">STOP SYSTEM</button>
+
     <script src="app.js"></script>
 </body>
 </html>
